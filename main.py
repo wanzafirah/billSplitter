@@ -63,7 +63,7 @@ Format:
 def extract_items_with_gemini(image: Image.Image, api_key: str) -> list[dict]:
     """Send receipt image to Gemini Vision and return parsed items."""
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     response = model.generate_content([GEMINI_PROMPT, image])
 
     # Strip markdown code fences if Gemini wraps the JSON
