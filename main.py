@@ -151,6 +151,18 @@ CSS = """
         color: #3a3a5a !important;
     }
 
+    /* All form labels */
+    label, .stNumberInput label, .stTextInput label,
+    .stTextArea label, .stMultiSelect label,
+    .stFileUploader label, .stCameraInput label,
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] span,
+    .stMultiSelect [data-testid="stWidgetLabel"] p {
+        color: #9b89b4 !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+    }
+
     /* Multiselect */
     .stMultiSelect > div {
         border-radius: 12px !important;
@@ -517,7 +529,13 @@ def step_results():
         st.warning(f"Not assigned to anyone: {', '.join(unassigned)}")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("Start Over"):
+    col1, col2 = st.columns(2)
+
+    if col1.button("Back"):
+        st.session_state.step = 4
+        st.rerun()
+
+    if col2.button("Start Over"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
