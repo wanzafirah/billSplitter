@@ -50,14 +50,58 @@ def extract_text_from_image(image: Image.Image) -> str:
 def parse_items_from_text(text: str) -> list[dict]:
     """
     Extract item name and price pairs from OCR text.
-    Looks for lines in the format: "Item Name    12.50"
-    (item name followed by two or more spaces, then a decimal price)
+
+    Handles two receipt formats:
+
+    Format 1 (multi-line) — item name on its own line starting with *,
+    price row follows on a later line:
+        *Beef Bolognese with Penne
+        Lunch
+                            20.00    1    0.00    20.00
+
+    Format 2 (single-line) — name and price on the same line:
+        Beef Bolognese with Penne    20.00
+
+    For multi-line receipts the Amount column (last number) is used,
+    so quantity > 1 is handled correctly (e.g. 2 x RM13 = RM26).
     """
     items = []
-    pattern = re.compile(r'^(.+?)\s{2,}(\d+\.\d{2})\s*$')
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
 
-    for line in text.splitlines():
-        match = pattern.match(line.strip())
+    # --- Format 1: multi-line (Malaysian cafe style) ---
+    # Item name line starts with *
+    name_pattern = re.compile(r'^\*(.+)')
+    # Price row: price  qty  discount  amount  (e.g. "20.00  1  0.00  20.00")
+    price_row_pattern = re.compile(r'(\d+\.\d{2})\s+\d+\s+\d+\.\d{2}\s+(\d+\.\d{2})')
+    # Stop scanning when we hit the totals section
+    totals_pattern = re.compile(r'^(total|subtotal|tax|service|rounding)', re.IGNORECASE)
+
+    current_name = None
+    for line in lines:
+        if totals_pattern.match(line):
+            current_name = None
+            continue
+
+        name_match = name_pattern.match(line)
+        if name_match:
+            current_name = name_match.group(1).strip()
+            continue
+
+        if current_name:
+            price_match = price_row_pattern.search(line)
+            if price_match:
+                amount = float(price_match.group(2))  # use Amount column (qty already applied)
+                if amount > 0:
+                    items.append({"name": current_name, "price": amount})
+                current_name = None
+
+    if items:
+        return items
+
+    # --- Format 2: single-line fallback ("Item Name    12.50") ---
+    single_line_pattern = re.compile(r'^(.+?)\s{2,}(\d+\.\d{2})\s*$')
+    for line in lines:
+        match = single_line_pattern.match(line)
         if match:
             name = match.group(1).strip()
             try:
