@@ -169,7 +169,10 @@ CSS = """
 
     /* Radio */
     .stRadio > div { gap: 12px; }
-    .stRadio label, .stRadio span { color: #9b89b4 !important; font-weight: 500; }
+    .stRadio label p,
+    .stRadio label span,
+    .stRadio div[data-testid="stMarkdownContainer"] p,
+    [role="radiogroup"] label p { color: #9b89b4 !important; font-weight: 600 !important; }
 
     /* Metric override */
     [data-testid="stMetricValue"] { color: #b5838d !important; font-weight: 700 !important; }
