@@ -111,8 +111,8 @@ def step_upload():
         if st.button("Extract Items from Receipt"):
             with st.spinner("Reading receipt..."):
                 raw_text = extract_text_from_image(image)
-                st.session_state.items = parse_items_from_text(raw_text)
-            if not st.session_state.items:
+                st.session_state.bill_items = parse_items_from_text(raw_text)
+            if not st.session_state.bill_items:
                 st.warning(
                     "Could not detect any items from the image. "
                     "You can enter them manually on the next screen."
@@ -122,7 +122,7 @@ def step_upload():
 
     st.markdown("---")
     if st.button("Skip — Enter Items Manually"):
-        st.session_state.items = []
+        st.session_state.bill_items = []
         st.session_state.step = 2
         st.rerun()
 
@@ -134,7 +134,7 @@ def step_items():
     st.caption("Edit names and prices. Use the trash icon to remove a row. Click below the table to add a row.")
 
     initial_data = pd.DataFrame(
-        [{"name": i["name"], "price": i["price"]} for i in st.session_state.items]
+        [{"name": i["name"], "price": i["price"]} for i in st.session_state.bill_items]
         or [{"name": "", "price": 0.0}]
     )
 
@@ -162,7 +162,7 @@ def step_items():
         if valid.empty:
             st.warning("Add at least one item with a name and price before continuing.")
         else:
-            st.session_state.items = valid[["name", "price"]].to_dict("records")
+            st.session_state.bill_items = valid[["name", "price"]].to_dict("records")
             st.session_state.step = 3
             st.rerun()
 
@@ -203,7 +203,7 @@ def step_assign():
     st.caption("Select everyone who shares each item. Items are split equally among selected people.")
 
     people = st.session_state.people
-    items = st.session_state.items
+    items = st.session_state.bill_items
 
     tax_rate = st.number_input(
         "Tax / Service Charge (%)",
@@ -234,7 +234,7 @@ def step_assign():
         st.rerun()
 
     if col2.button("Calculate"):
-        st.session_state.items = items
+        st.session_state.bill_items = items
         st.session_state.tax_rate = tax_rate
         st.session_state.step = 5
         st.rerun()
@@ -245,7 +245,7 @@ def step_assign():
 def step_results():
     st.subheader("Results")
 
-    items = st.session_state.items
+    items = st.session_state.bill_items
     tax_rate = st.session_state.get("tax_rate", 6.0)
     totals = calculate_bill(items, tax_rate)
 
@@ -277,7 +277,7 @@ def step_results():
 
 
 def init_session():
-    defaults = {"step": 1, "items": [], "people": [], "tax_rate": 6.0}
+    defaults = {"step": 1, "bill_items": [], "people": [], "tax_rate": 6.0}
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
