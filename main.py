@@ -10,9 +10,16 @@ PASTEL_CSS = """
 <style>
     .stApp {
         background-color: #fdf6f0;
+        color: #3a3a5a;
     }
-    h1, h2, h3 {
-        color: #9b89b4;
+    .stApp p, .stApp span, .stApp label, .stApp div {
+        color: #3a3a5a;
+    }
+    h1 {
+        color: #b5838d !important;
+    }
+    h2, h3 {
+        color: #9b89b4 !important;
     }
     .stButton > button {
         background-color: #c8b6e2;
@@ -26,10 +33,10 @@ PASTEL_CSS = """
         background-color: #b8a2d8;
     }
     [data-testid="stMetricValue"] {
-        color: #b5838d;
+        color: #b5838d !important;
     }
     [data-testid="stMetricLabel"] {
-        color: #9b89b4;
+        color: #9b89b4 !important;
     }
 </style>
 """
