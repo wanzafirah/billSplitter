@@ -148,7 +148,7 @@ CSS = """
     .stNumberInput input {
         border-radius: 12px !important;
         border: 1.5px solid #e8e0f5 !important;
-        color: #3a3a5a !important;
+        color: white !important;
     }
 
     /* All form labels */
