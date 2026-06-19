@@ -1,10 +1,13 @@
+import json
 import re
 from collections import defaultdict
 
+import google.generativeai as genai
 import pandas as pd
-import pytesseract
 import streamlit as st
 from PIL import Image
+
+#theme
 
 PASTEL_CSS = """
 <style>
@@ -42,82 +45,47 @@ PASTEL_CSS = """
 """
 
 
-def extract_text_from_image(image: Image.Image) -> str:
-    """Run Tesseract OCR on the receipt image and return raw text."""
-    return pytesseract.image_to_string(image)
+#gemini extract
+
+GEMINI_PROMPT = """
+Look at this receipt image and extract all food and drink items with their total amounts.
+
+Rules:
+- Use the Amount column (rightmost price), not the unit price, so quantity is already included.
+- Do not include tax, service charge, rounding, subtotal, or total rows.
+- Return ONLY a valid JSON array, no explanation, no markdown.
+
+Format:
+[{"name": "Item Name", "price": 12.50}, ...]
+"""
 
 
-def parse_items_from_text(text: str) -> list[dict]:
-    """
-    Extract item name and price pairs from OCR text.
+def extract_items_with_gemini(image: Image.Image, api_key: str) -> list[dict]:
+    """Send receipt image to Gemini Vision and return parsed items."""
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    response = model.generate_content([GEMINI_PROMPT, image])
 
-    Handles two receipt formats:
+    # Strip markdown code fences if Gemini wraps the JSON
+    text = response.text.strip()
+    text = re.sub(r'^```json\s*|\s*```$', '', text, flags=re.MULTILINE).strip()
 
-    Format 1 (multi-line) — item name on its own line starting with *,
-    price row follows on a later line:
-        *Beef Bolognese with Penne
-        Lunch
-                            20.00    1    0.00    20.00
-
-    Format 2 (single-line) — name and price on the same line:
-        Beef Bolognese with Penne    20.00
-
-    For multi-line receipts the Amount column (last number) is used,
-    so quantity > 1 is handled correctly (e.g. 2 x RM13 = RM26).
-    """
-    items = []
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-
-    # --- Format 1: multi-line (Malaysian cafe style) ---
-    # Item name line starts with *
-    name_pattern = re.compile(r'^\*(.+)')
-    # Price row: price  qty  discount  amount  (e.g. "20.00  1  0.00  20.00")
-    price_row_pattern = re.compile(r'(\d+\.\d{2})\s+\d+\s+\d+\.\d{2}\s+(\d+\.\d{2})')
-    # Stop scanning when we hit the totals section
-    totals_pattern = re.compile(r'^(total|subtotal|tax|service|rounding)', re.IGNORECASE)
-
-    current_name = None
-    for line in lines:
-        if totals_pattern.match(line):
-            current_name = None
-            continue
-
-        name_match = name_pattern.match(line)
-        if name_match:
-            current_name = name_match.group(1).strip()
-            continue
-
-        if current_name:
-            price_match = price_row_pattern.search(line)
-            if price_match:
-                amount = float(price_match.group(2))  # use Amount column (qty already applied)
-                if amount > 0:
-                    items.append({"name": current_name, "price": amount})
-                current_name = None
-
-    if items:
-        return items
-
-    # --- Format 2: single-line fallback ("Item Name    12.50") ---
-    single_line_pattern = re.compile(r'^(.+?)\s{2,}(\d+\.\d{2})\s*$')
-    for line in lines:
-        match = single_line_pattern.match(line)
-        if match:
-            name = match.group(1).strip()
-            try:
-                price = float(match.group(2))
-                if name and price > 0:
-                    items.append({"name": name, "price": price})
-            except ValueError:
-                continue
-
-    return items
+    raw = json.loads(text)
+    return [
+        {"name": str(item["name"]), "price": float(item["price"])}
+        for item in raw
+        if item.get("name") and float(item.get("price", 0)) > 0
+    ]
 
 
-#bill calc
+# bill calculate
 
 def calculate_bill(items: list[dict], tax_rate: float) -> dict[str, float]:
-
+    """
+    Calculate each person's share.
+    Shared items are divided equally among assigned people.
+    Tax is a percentage on top of each person's subtotal.
+    """
     person_subtotals: dict[str, float] = defaultdict(float)
 
     for item in items:
@@ -138,6 +106,14 @@ def calculate_bill(items: list[dict], tax_rate: float) -> dict[str, float]:
 def step_upload():
     st.subheader("Upload Receipt")
 
+    # API key input (sidebar so it stays out of the way)
+    with st.sidebar:
+        st.markdown("### Gemini API Key")
+        st.caption("Required for automatic item extraction. [Get a free key](https://aistudio.google.com/app/apikey)")
+        api_key = st.text_input("API Key", type="password", key="api_key_input")
+        if api_key:
+            st.session_state.api_key = api_key
+
     source = st.radio("Receipt source", ["Upload image", "Take photo"], horizontal=True)
 
     image = None
@@ -152,17 +128,21 @@ def step_upload():
 
     if image:
         st.image(image, use_container_width=True)
+
         if st.button("Extract Items from Receipt"):
-            with st.spinner("Reading receipt..."):
-                raw_text = extract_text_from_image(image)
-                st.session_state.bill_items = parse_items_from_text(raw_text)
-            if not st.session_state.bill_items:
-                st.warning(
-                    "Could not detect any items from the image. "
-                    "You can enter them manually on the next screen."
-                )
-            st.session_state.step = 2
-            st.rerun()
+            key = st.session_state.get("api_key", "")
+            if not key:
+                st.error("Enter your Gemini API key in the sidebar first.")
+            else:
+                with st.spinner("Reading receipt..."):
+                    try:
+                        st.session_state.bill_items = extract_items_with_gemini(image, key)
+                        if not st.session_state.bill_items:
+                            st.warning("No items found. You can add them manually on the next screen.")
+                        st.session_state.step = 2
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not read receipt: {e}")
 
     st.markdown("---")
     if st.button("Skip — Enter Items Manually"):
@@ -171,7 +151,7 @@ def step_upload():
         st.rerun()
 
 
-# edit items
+# review item
 
 def step_items():
     st.subheader("Review Items")
@@ -211,7 +191,7 @@ def step_items():
             st.rerun()
 
 
-# enter names
+# enter name
 
 def step_people():
     st.subheader("Who is splitting the bill?")
@@ -240,10 +220,10 @@ def step_people():
             st.rerun()
 
 
-#assign item
+# assign item to people
 
 def step_assign():
-    st.subheader("Step 4 of 4 — Assign Items")
+    st.subheader("Assign Items")
     st.caption("Select everyone who shares each item. Items are split equally among selected people.")
 
     people = st.session_state.people
@@ -260,7 +240,6 @@ def step_assign():
     st.markdown("---")
 
     for i, item in enumerate(items):
-        # Default: everyone shares the item
         default_persons = [p for p in item.get("persons", people) if p in people] or people
         assigned = st.multiselect(
             f"{item['name']}  —  RM {item['price']:.2f}",
@@ -319,6 +298,7 @@ def step_results():
         st.rerun()
 
 
+# session
 
 def init_session():
     defaults = {"step": 1, "bill_items": [], "people": [], "tax_rate": 6.0}
@@ -327,7 +307,7 @@ def init_session():
             st.session_state[key] = value
 
 
-#main
+# main
 
 def main():
     st.set_page_config(page_title="Bill Splitter", layout="centered")
