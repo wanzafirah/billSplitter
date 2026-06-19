@@ -81,11 +81,11 @@ def extract_items_with_gemini(image: Image.Image, api_key: str) -> list[dict]:
 
 # bill calculate
 
-def calculate_bill(items: list[dict], service_charge_rate: float, tax_rate: float) -> dict[str, float]:
+def calculate_bill(items: list[dict], service_charge_rate: float, tax_fixed: float) -> dict[str, float]:
     """
     Calculate each person's share.
-    Shared items are divided equally among assigned people.
-    Service charge and tax are applied proportionally on top of each person's subtotal.
+    - Service charge: applied as % of each person's subtotal (proportional to what they ate).
+    - Tax: fixed RM amount split equally among all people.
     """
     person_subtotals: dict[str, float] = defaultdict(float)
 
@@ -97,9 +97,11 @@ def calculate_bill(items: list[dict], service_charge_rate: float, tax_rate: floa
         for person in persons:
             person_subtotals[person] += share
 
-    combined_rate = service_charge_rate + tax_rate
+    all_people = list(person_subtotals.keys())
+    tax_per_person = round(tax_fixed / len(all_people), 2) if all_people else 0
+
     return {
-        person: round(subtotal * (1 + combined_rate / 100), 2)
+        person: round(subtotal * (1 + service_charge_rate / 100) + tax_per_person, 2)
         for person, subtotal in person_subtotals.items()
     }
 
@@ -239,8 +241,8 @@ def step_assign():
     service_charge_rate = col_sc.number_input(
         "Service Charge (%)", min_value=0.0, max_value=50.0, value=5.0, step=0.5
     )
-    tax_rate = col_tax.number_input(
-        "Tax (%)", min_value=0.0, max_value=50.0, value=6.0, step=0.5
+    tax_fixed = col_tax.number_input(
+        "Tax (RM)", min_value=0.0, value=0.0, step=0.01
     )
 
     st.markdown("---")
@@ -265,7 +267,7 @@ def step_assign():
     if col2.button("Calculate"):
         st.session_state.bill_items = items
         st.session_state.service_charge_rate = service_charge_rate
-        st.session_state.tax_rate = tax_rate
+        st.session_state.tax_fixed = tax_fixed
         st.session_state.step = 5
         st.rerun()
 
@@ -277,18 +279,17 @@ def step_results():
 
     items = st.session_state.bill_items
     service_charge_rate = st.session_state.get("service_charge_rate", 5.0)
-    tax_rate = st.session_state.get("tax_rate", 6.0)
-    totals = calculate_bill(items, service_charge_rate, tax_rate)
+    tax_fixed = st.session_state.get("tax_fixed", 0.0)
+    totals = calculate_bill(items, service_charge_rate, tax_fixed)
 
     grand_subtotal = sum(item["price"] for item in items)
     grand_service_charge = round(grand_subtotal * service_charge_rate / 100, 2)
-    grand_tax = round(grand_subtotal * tax_rate / 100, 2)
-    grand_total = round(grand_subtotal + grand_service_charge + grand_tax, 2)
+    grand_total = round(grand_subtotal + grand_service_charge + tax_fixed, 2)
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Subtotal", f"RM {grand_subtotal:.2f}")
     col2.metric(f"Service Charge ({service_charge_rate:.0f}%)", f"RM {grand_service_charge:.2f}")
-    col3.metric(f"Tax ({tax_rate:.0f}%)", f"RM {grand_tax:.2f}")
+    col3.metric("Tax", f"RM {tax_fixed:.2f}")
     col4.metric("Grand Total", f"RM {grand_total:.2f}")
 
     st.markdown("---")
@@ -311,7 +312,7 @@ def step_results():
 # session
 
 def init_session():
-    defaults = {"step": 1, "bill_items": [], "people": [], "service_charge_rate": 5.0, "tax_rate": 6.0}
+    defaults = {"step": 1, "bill_items": [], "people": [], "service_charge_rate": 5.0, "tax_fixed": 0.0}
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
