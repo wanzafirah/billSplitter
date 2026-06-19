@@ -48,10 +48,11 @@ PASTEL_CSS = """
 #gemini extract
 
 GEMINI_PROMPT = """
-Look at this receipt image and extract all food and drink items with their total amounts.
+Look at this receipt image and extract all food and drink items.
 
 Rules:
-- Use the Amount column (rightmost price), not the unit price, so quantity is already included.
+- If an item has quantity 1, return it as one entry with its price.
+- If an item has quantity greater than 1, return it as SEPARATE entries — one per unit, each with the unit price (not the total). For example, 2x Latte at RM13.00 each becomes two entries both named "Latte" with price 13.00.
 - Do not include tax, service charge, rounding, subtotal, or total rows.
 - Return ONLY a valid JSON array, no explanation, no markdown.
 
