@@ -106,13 +106,17 @@ def calculate_bill(items: list[dict], tax_rate: float) -> dict[str, float]:
 def step_upload():
     st.subheader("Upload Receipt")
 
-    # API key input (sidebar so it stays out of the way)
-    with st.sidebar:
-        st.markdown("### Gemini API Key")
-        st.caption("Required for automatic item extraction. [Get a free key](https://aistudio.google.com/app/apikey)")
-        api_key = st.text_input("API Key", type="password", key="api_key_input")
-        if api_key:
-            st.session_state.api_key = api_key
+    # Load API key: from Streamlit secrets (deployed) or sidebar input (local)
+    if "api_key" not in st.session_state:
+        st.session_state.api_key = st.secrets.get("GEMINI_API_KEY", "")
+
+    if not st.session_state.api_key:
+        with st.sidebar:
+            st.markdown("### Gemini API Key")
+            st.caption("Required for automatic extraction. [Get a free key](https://aistudio.google.com/app/apikey)")
+            api_key = st.text_input("API Key", type="password", key="api_key_input")
+            if api_key:
+                st.session_state.api_key = api_key
 
     source = st.radio("Receipt source", ["Upload image", "Take photo"], horizontal=True)
 
