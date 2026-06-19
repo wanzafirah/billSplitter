@@ -169,6 +169,7 @@ CSS = """
 
     /* Radio */
     .stRadio > div { gap: 12px; }
+    .stRadio label, .stRadio span { color: #9b89b4 !important; font-weight: 500; }
 
     /* Metric override */
     [data-testid="stMetricValue"] { color: #b5838d !important; font-weight: 700 !important; }
